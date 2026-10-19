@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Hill Climb</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap">
+<style>
+  :root {
+    --ink: #1c2530;
+    --panel: rgba(20, 28, 38, .72);
+    --gold: #f2c230;
+    --gold-deep: #a37a10;
+    --fuel-hi: #58c247;
+    --fuel-mid: #f2c230;
+    --fuel-lo: #e43b2c;
+    --text: #ffffff;
+    --muted: #b8c6d4;
+    --display: "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe6f2; color: var(--text);
+    font-family: var(--display); user-select: none; -webkit-user-select: none; touch-action: none; }
+  [hidden] { display: none !important; }
+  canvas#c { display: block; width: 100%; height: 100%; }
+
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  .tl { position: absolute; left: 16px; top: calc(14px + env(safe-area-inset-top, 0px)); display: grid; gap: 8px; }
+  .chip { background: var(--panel); border-radius: 12px; padding: 6px 12px; display: flex; align-items: center; gap: 10px;
+    backdrop-filter: blur(4px); font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+  #fuel { width: 210px; box-sizing: border-box; }
+  #fuel .label { font-size: 13px; letter-spacing: .08em; }
+  #fuel .bar { flex: 1; height: 14px; border-radius: 7px; background: rgba(255,255,255,.15); overflow: hidden; }
+  #fuelFill { height: 100%; border-radius: 7px; width: 100%;
+    background: linear-gradient(90deg, var(--fuel-lo), var(--fuel-mid) 35%, var(--fuel-hi)); transition: width .15s linear; }
+  #fuel.low #fuelFill { background: var(--fuel-lo); }
+  #fuel.low { box-shadow: 0 0 0 2px var(--fuel-lo); }
+  .coin-icon { width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffe68a, var(--gold) 55%, var(--gold-deep));
+    box-shadow: inset 0 0 0 2px rgba(122, 82, 8, .6); }
+  .top { position: absolute; left: 50%; transform: translateX(-50%); top: calc(8px + env(safe-area-inset-top, 0px)); text-align: center;
+    text-shadow: 0 3px 0 rgba(0,0,0,.35); }
+  #dist { font-size: 40px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  #best { font-size: 14px; font-weight: 700; color: var(--gold); letter-spacing: .06em; }
+  .tr { position: absolute; right: 16px; top: calc(10px + env(safe-area-inset-top, 0px)); display: grid; justify-items: end; gap: 4px; }
+  #tach { width: 150px; height: 96px; background: var(--panel); border-radius: 14px; }
+  #sound { pointer-events: auto; background: var(--panel); color: var(--muted); border: 0; border-radius: 8px; font: 700 12px var(--display);
+    padding: 4px 10px; cursor: pointer; letter-spacing: .05em; }
+  #banner { position: absolute; left: 0; right: 0; top: 26%; text-align: center; font-size: 46px; font-weight: 800;
+    color: #ff7a4a; text-shadow: 0 4px 0 var(--ink); }
+
+  #floaters { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .floater { position: absolute; left: 0; top: 0; font-weight: 800; font-size: 26px; white-space: nowrap;
+    text-shadow: 0 3px 0 var(--ink), 0 0 12px rgba(0,0,0,.3); }
+  .floater.bonus { color: #ffd84a; }
+  .floater.air { color: #bff0ff; }
+  .floater.fuel { color: #ff7a4a; }
+
+  .pedal { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 112px; height: 112px;
+    border-radius: 22px; background: rgba(20, 28, 38, .35); border: 3px solid rgba(255, 255, 255, .75);
+    color: #fff; font: 800 16px var(--display); letter-spacing: .1em;
+    display: none; align-items: center; justify-content: center; }
+  .pedal.active { background: rgba(20, 28, 38, .6); transform: scale(.95); }
+  #brake { left: 18px; }
+  #gas { right: 18px; }
+  @media (pointer: coarse) { .pedal { display: flex; } }
+
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(14, 26, 40, .25), rgba(14, 26, 40, .7)); padding: 16px; }
+  .card { background: #1c2733; border: 3px solid var(--gold); border-radius: 22px; padding: 26px 30px;
+    max-width: 400px; width: 100%; box-sizing: border-box; text-align: center; box-shadow: 0 18px 50px rgba(0, 0, 0, .45); }
+  .card h1 { margin: 0; font-size: 52px; line-height: 1; color: var(--gold); text-shadow: 0 4px 0 #7a5208; }
+  .card h2 { margin: 0 0 10px; font-size: 34px; line-height: 1.1; color: var(--gold); }
+  .card p { margin: 10px 0; line-height: 1.45; color: var(--muted); font-size: 16px; }
+  .record { color: #ffd84a; font-weight: 800; letter-spacing: .08em; }
+  .stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; text-align: left; margin: 14px 0; font-size: 18px;
+    font-variant-numeric: tabular-nums; }
+  .stats b { text-align: right; color: #fff; }
+  .card p.keys { font-size: 14px; }
+  kbd { background: #0f1720; border: 1px solid #44566a; border-radius: 5px; padding: 0 6px; font-family: inherit; color: #fff; }
+  .btn { margin-top: 10px; background: var(--gold); color: #2a1a00; border: 0; border-radius: 14px;
+    font: 800 22px var(--display); padding: 10px 40px; cursor: pointer; box-shadow: 0 5px 0 var(--gold-deep); }
+  .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--gold-deep); }
+  .btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px;
+    font-size: 22px; font-weight: 700; color: var(--ink); text-align: center; }
+
+
+  /* race HUD */
+  #raceHud { position: absolute; left: 50%; transform: translateX(-50%); top: calc(64px + env(safe-area-inset-top, 0px));
+    width: min(420px, calc(100vw - 32px)); display: grid; gap: 6px; }
+  .raceline { display: flex; justify-content: space-between; font-weight: 800; font-size: 18px; text-shadow: 0 2px 0 rgba(0,0,0,.35);
+    font-variant-numeric: tabular-nums; }
+  #racePos { color: var(--gold); }
+  #raceBar { position: relative; height: 10px; border-radius: 5px; background: var(--panel); margin-inline: 8px; }
+  #raceBar::after { content: ""; position: absolute; right: -8px; top: -5px; width: 14px; height: 20px; border-radius: 3px;
+    background: repeating-conic-gradient(#111 0 25%, #f4f4f4 0 50%) 0 0 / 7px 7px; }
+  .pdot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; transform: translate(-50%, -50%);
+    border: 2px solid #fff; transition: left .2s linear; }
+  .pdot.me { width: 18px; height: 18px; z-index: 1; box-shadow: 0 0 0 2px var(--ink); }
+  #tags { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .tag { position: absolute; left: 0; top: 0; padding: 2px 10px; border-radius: 999px; background: var(--c, #333); color: #fff;
+    font-weight: 800; font-size: 15px; white-space: nowrap; box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  #count { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
+    font-size: 140px; font-weight: 800; color: #fff; text-shadow: 0 8px 0 var(--ink); }
+  #count.pop { animation: pop .9s ease-out forwards; }
+  @keyframes pop { from { transform: scale(.6); opacity: 1; } 60% { transform: scale(1.15); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
+  #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    background: var(--panel); padding: 8px 18px; border-radius: 12px; font-weight: 700; font-size: 16px; max-width: calc(100vw - 32px);
+    text-align: center; pointer-events: none; }
+
+  /* menu, lobby, results */
+  .menu-actions { display: grid; gap: 10px; margin-top: 14px; }
+  .field { display: grid; gap: 4px; text-align: left; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+  input { font: 700 18px var(--display); color: #fff; background: #0f1720; border: 2px solid #44566a; border-radius: 10px;
+    padding: 8px 12px; min-width: 0; }
+  input:focus-visible { outline: none; border-color: var(--gold); }
+  #codeInput { text-transform: uppercase; letter-spacing: .3em; width: 100%; box-sizing: border-box; text-align: center; }
+  .join { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .btn.alt { background: #2b3a4a; color: #fff; box-shadow: 0 5px 0 #15202b; }
+  .btn.small { font-size: 18px; padding: 8px 18px; margin-top: 0; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: .1em; margin-top: 6px; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: #3a4a5a; }
+  #raceBox.offline { opacity: .6; }
+  .note { font-size: 14px !important; }
+  #menuMsg { color: #ff9d7a; font-weight: 700; margin: 10px 0 0; }
+  .code { font-size: 56px; font-weight: 800; letter-spacing: .18em; color: var(--gold); line-height: 1; margin: 4px 0; }
+  .link { font-size: 14px; color: var(--muted); word-break: break-all; user-select: text; -webkit-user-select: text; }
+  .players { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 6px; text-align: left; }
+  .players li { display: flex; align-items: center; gap: 10px; background: #243241; border-radius: 10px; padding: 8px 12px; font-weight: 700; }
+  .players em { margin-left: auto; font-style: normal; font-size: 12px; color: var(--gold); letter-spacing: .08em; text-transform: uppercase; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; display: inline-block; vertical-align: middle; margin-right: 8px; border: 2px solid #fff; }
+  .players .dot { margin-right: 0; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0 10px; }
+  .seg button { font: 800 16px var(--display); padding: 8px 0; border-radius: 10px; border: 2px solid #44566a; background: #0f1720; color: #fff; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--gold); color: #2a1a00; border-color: var(--gold); }
+  .seg button:disabled { cursor: default; }
+  .seg button:disabled:not([aria-pressed="true"]) { opacity: .5; }
+  .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  table.results { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 17px; font-variant-numeric: tabular-nums; }
+  .results td { padding: 7px 6px; text-align: left; border-bottom: 1px solid #2f3e4e; }
+  .results td:last-child { text-align: right; }
+  .results tr.me td { color: var(--gold); font-weight: 800; }
+  .muted { color: var(--muted); font-size: 15px; }
+
+  @media (max-width: 560px) {
+    #fuel { width: 150px; }
+    #dist { font-size: 30px; }
+    .top { top: calc(96px + env(safe-area-inset-top, 0px)); }
+    #raceHud { top: calc(150px + env(safe-area-inset-top, 0px)); }
+    #count { font-size: 100px; }
+    #tach { width: 120px; height: 77px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .btn:active, .pedal.active { transform: none; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="loading">Loading…</div>
+
+<div id="hud" hidden>
+  <div class="tl">
+    <div class="chip" id="fuel"><span class="label">FUEL</span><div class="bar"><div id="fuelFill"></div></div></div>
+    <div class="chip"><span class="coin-icon"></span><span id="coins">0</span></div>
+  </div>
+  <div class="top"><div id="dist">0 m</div><div id="best">BEST 0 m</div></div>
+  <div class="tr"><canvas id="tach"></canvas><button id="sound" type="button">Sound on</button></div>
+  <div id="raceHud" hidden>
+    <div class="raceline"><span id="racePos">1st / 1</span><span id="raceTime">0:00.0</span></div>
+    <div id="raceBar"><div id="raceDots"></div></div>
+  </div>
+  <div id="banner"></div>
+</div>
+<div id="tags"></div>
+<div id="floaters"></div>
+<div id="count"></div>
+<div id="toast" hidden></div>
+
+<div class="pedal" id="brake">BRAKE</div>
+<div class="pedal" id="gas">GAS</div>
+
+<div class="overlay" id="startScreen" hidden>
+  <div class="card">
+    <h1>Hill Climb</h1>
+    <p>Race a friend up the hills, or drive solo as far as you can.</p>
+    <label class="field" for="nameInput">YOUR NAME
+      <input id="nameInput" maxlength="14" autocomplete="nickname" placeholder="Driver"></label>
+    <div class="menu-actions" id="raceBox">
+      <button class="btn" id="createBtn" type="button">Create race</button>
+      <div class="join">
+        <input id="codeInput" maxlength="4" autocomplete="off" placeholder="CODE" aria-label="Room code">
+        <button class="btn small alt" id="joinBtn" type="button">Join</button>
+      </div>
+      <p class="note muted" id="offlineNote" hidden>To race a friend, start the server with <kbd>npm start</kbd> and open the address it prints.</p>
+      <p id="menuMsg" hidden></p>
+      <div class="divider">OR</div>
+      <button class="btn alt" id="soloBtn" type="button">Solo drive</button>
+    </div>
+    <p class="keys"><kbd>→</kbd> / <kbd>D</kbd> gas &nbsp; <kbd>←</kbd> / <kbd>A</kbd> brake &amp; reverse<br>
+      In the air, gas tilts back and brake tilts forward</p>
+    <div class="stats"><span>Best solo distance</span><b id="sBest">0 m</b><span>Coins banked</span><b id="sBank">0</b></div>
+  </div>
+</div>
+
+<div class="overlay" id="lobbyScreen" hidden>
+  <div class="card">
+    <h2>Race room</h2>
+    <div class="code" id="roomCode">----</div>
+    <div class="link" id="roomLink"></div>
+    <div class="row" style="margin-top:10px"><button class="btn small alt" id="copyCode" type="button">Copy invite</button></div>
+    <ul class="players" id="lobbyPlayers"></ul>
+    <div class="field">TRACK LENGTH</div>
+    <div class="seg" id="trackPick">
+      <button type="button" data-len="500">500 m</button>
+      <button type="button" data-len="1000">1000 m</button>
+      <button type="button" data-len="2000">2000 m</button>
+    </div>
+    <p class="muted" id="lobbyHint"></p>
+    <button class="btn" id="startRace" type="button">Start race</button>
+    <p class="muted" id="lobbyWait">Waiting for the host to start the race…</p>
+    <div class="row"><button class="btn small alt" id="leaveLobby" type="button">Leave</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="resultsScreen" hidden>
+  <div class="card">
+    <h2 id="resultsTitle">Race over</h2>
+    <table class="results"><tbody id="resultsRows"></tbody></table>
+    <button class="btn" id="rematch" type="button">Race again</button>
+    <p class="muted" id="resultsWait">Waiting for the host to set up the next race…</p>
+    <div class="row"><button class="btn small alt" id="leaveResults" type="button">Leave</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="overScreen" hidden>
+  <div class="card">
+    <h2 id="overReason">Driver down</h2>
+    <div class="record" id="oRecord" hidden>NEW RECORD</div>
+    <div class="stats">
+      <span>Distance</span><b id="oDist">0 m</b>
+      <span>Coins</span><b id="oCoins">0</b>
+      <span>Best distance</span><b id="oBest">0 m</b>
+    </div>
+    <button class="btn" id="againBtn" type="button">Drive again</button>
+    <div class="row"><button class="btn small alt" id="overMenu" type="button">Menu</button></div>
+  </div>
+</div>
+
+<script src="dist/game.js"></script>
+</body>
+</html>

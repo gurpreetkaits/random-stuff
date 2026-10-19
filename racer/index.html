@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Ridgeline GP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Archivo+Black&display=swap">
+<style>
+  :root {
+    --ink: #0b0e13;
+    --glass: rgba(10, 14, 20, .62);
+    --line: rgba(255, 255, 255, .14);
+    --accent: #ff4d1f;
+    --accent-2: #ffd166;
+    --text: #ffffff;
+    --muted: #aab4c0;
+    --ui: "Rajdhani", "Arial Narrow", system-ui, sans-serif;
+    --display: "Archivo Black", "Arial Black", system-ui, sans-serif;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1d22; color: var(--text); font-family: var(--ui);
+    user-select: none; -webkit-user-select: none; touch-action: none; }
+  [hidden] { display: none !important; }
+  canvas#c { display: block; width: 100%; height: 100%; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  .panel { background: var(--glass); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 10px; }
+  .tl { position: absolute; left: 16px; top: calc(16px + env(safe-area-inset-top, 0px)); display: grid; gap: 8px; }
+  .posbox { display: flex; align-items: baseline; gap: 2px; padding: 4px 16px 2px; }
+  #pos { font: 400 54px/1 var(--display); }
+  #posOf { font-size: 26px; font-weight: 700; color: var(--muted); }
+  #lap { padding: 4px 16px; font-size: 22px; font-weight: 700; letter-spacing: .08em; }
+  .times { padding: 8px 14px; display: grid; grid-template-columns: auto auto; gap: 0 16px; font-size: 17px; font-weight: 600;
+    font-variant-numeric: tabular-nums; }
+  .times span:nth-child(odd) { color: var(--muted); letter-spacing: .08em; font-size: 14px; align-self: center; }
+  .times b { text-align: right; }
+  #minimap { position: absolute; right: 16px; top: calc(16px + env(safe-area-inset-top, 0px)); width: 170px; height: 170px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(10,14,20,.55) 60%, rgba(10,14,20,.25)); }
+  #speedo { position: absolute; right: 16px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: 240px; height: 150px; }
+  #lights { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); display: flex; gap: 14px; padding: 14px 18px; }
+  #lights i { width: 46px; height: 46px; border-radius: 50%; background: #2a0c0a; box-shadow: inset 0 0 0 3px #111; }
+  #lights i.on { background: radial-gradient(circle at 40% 35%, #ff8a7a, #ff1a10 60%, #a00); box-shadow: 0 0 24px #ff2a1a, inset 0 0 0 3px #111; }
+  #flash { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font: 400 92px/1 var(--display); color: #fff; opacity: 0;
+    text-shadow: 0 6px 30px rgba(0,0,0,.5); letter-spacing: .02em; }
+  #flash.pop { animation: pop 1.4s ease-out forwards; }
+  @keyframes pop { 0% { transform: scale(.7); opacity: 0; } 15% { transform: scale(1.05); opacity: 1; } 70% { opacity: 1; } 100% { transform: scale(1.1); opacity: 0; } }
+  #wrong { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); padding: 8px 22px; background: #c8102e; border-radius: 8px;
+    font: 400 34px var(--display); letter-spacing: .04em; }
+  #paused { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); padding: 10px 26px; font: 400 40px var(--display); }
+  #toast { position: absolute; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 8px 18px;
+    font-size: 20px; font-weight: 700; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
+  #tags { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .tag { position: absolute; left: 0; top: 0; padding: 1px 10px; border-radius: 4px; background: rgba(10,14,20,.7); color: #fff;
+    border-left: 4px solid var(--c); font-weight: 700; font-size: 16px; white-space: nowrap; transform-origin: 50% 100%; }
+
+  /* touch controls */
+  .touch { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); display: none; gap: 12px; }
+  .touch button { width: 84px; height: 84px; border-radius: 18px; border: 2px solid rgba(255,255,255,.6); background: rgba(10,14,20,.35);
+    color: #fff; font: 700 15px var(--ui); letter-spacing: .08em; }
+  .touch button.on { background: rgba(255,77,31,.5); }
+  #touchL { left: 16px; }
+  #touchR { right: 16px; bottom: calc(170px + env(safe-area-inset-bottom, 0px)); }
+  @media (pointer: coarse) { .touch { display: flex; } }
+
+  /* ---------- menus ---------- */
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: flex-start; padding: 16px 16px 16px max(16px, 6vw);
+    background: linear-gradient(90deg, rgba(8,10,14,.86) 0%, rgba(8,10,14,.55) 38%, rgba(8,10,14,0) 70%); overflow-y: auto; }
+  .card { width: min(420px, 100%); display: grid; gap: 14px; }
+  .brand { font: 400 clamp(40px, 7vw, 64px)/0.92 var(--display); letter-spacing: -.01em; text-transform: uppercase; margin: 0; text-wrap: balance; }
+  .brand span { color: var(--accent); }
+  .sub { margin: 0; color: var(--muted); font-size: 19px; font-weight: 600; }
+  h2 { margin: 0; font: 400 34px/1 var(--display); text-transform: uppercase; }
+  label.field { display: grid; gap: 4px; font-size: 14px; font-weight: 700; color: var(--muted); letter-spacing: .1em; }
+  input, select { font: 700 20px var(--ui); color: #fff; background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 12px; min-width: 0; }
+  select option { color: #000; }
+  input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #codeInput { text-transform: uppercase; letter-spacing: .35em; text-align: center; }
+  .btn { font: 400 20px var(--display); text-transform: uppercase; letter-spacing: .02em; color: #fff; background: var(--accent); border: 0;
+    border-radius: 8px; padding: 13px 22px; cursor: pointer; clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%); text-align: left; }
+  .btn:hover { filter: brightness(1.1); }
+  .btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  .btn.alt { background: rgba(255,255,255,.12); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .group { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); }
+  .group h3 { margin: 0; font-size: 15px; letter-spacing: .14em; color: var(--muted); }
+  .note { margin: 0; color: var(--muted); font-size: 16px; }
+  #menuMsg { margin: 0; color: #ff9d7a; font-weight: 700; font-size: 17px; }
+  .keys { color: var(--muted); font-size: 15px; line-height: 1.6; margin: 0; }
+  kbd { font: 700 13px var(--ui); background: rgba(255,255,255,.1); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; color: #fff; }
+  .stat { display: flex; justify-content: space-between; color: var(--muted); font-size: 17px; font-weight: 600; }
+  .stat b { color: #fff; font-variant-numeric: tabular-nums; }
+  .code { font: 400 64px/1 var(--display); letter-spacing: .12em; color: var(--accent-2); }
+  .link { color: var(--muted); font-size: 16px; word-break: break-all; user-select: text; -webkit-user-select: text; }
+  .players { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .players li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(255,255,255,.06); border-radius: 6px;
+    font-size: 19px; font-weight: 700; }
+  .players .slot { color: var(--muted); font-size: 14px; width: 24px; }
+  .players em { margin-left: auto; font-style: normal; font-size: 13px; color: var(--accent-2); letter-spacing: .12em; text-transform: uppercase; }
+  .dot { width: 14px; height: 14px; border-radius: 3px; display: inline-block; flex: none; margin-right: 8px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.4); }
+  .players .dot { margin-right: 0; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .seg button { font: 700 18px var(--ui); padding: 8px 0; border-radius: 6px; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: #fff; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+  .seg button:disabled { cursor: default; }
+  .seg button:disabled:not([aria-pressed="true"]) { opacity: .45; }
+  table.results { width: 100%; border-collapse: collapse; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .results td { padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  .results td:first-child { color: var(--muted); width: 44px; }
+  .results td:nth-child(n+3) { text-align: right; }
+  .results tr.me td { color: var(--accent-2); }
+  .results thead td { font-size: 13px; letter-spacing: .12em; color: var(--muted); }
+  #loading { position: fixed; inset: 0; display: grid; place-items: center; font: 400 28px var(--display); color: #fff; padding: 16px; text-align: center; }
+
+  @media (max-width: 640px) {
+    .overlay { background: rgba(8,10,14,.82); justify-content: center; padding-left: 16px; }
+    #minimap { width: 110px; height: 110px; }
+    #speedo { width: 180px; height: 112px; }
+    #pos { font-size: 40px; }
+    .times { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { #flash.pop { animation-duration: .01s; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="loading">Building the circuit…</div>
+
+<div id="hud" hidden>
+  <div class="tl">
+    <div class="panel posbox"><span id="pos">1</span><span id="posOf">/1</span></div>
+    <div class="panel" id="lap">LAP 1/3</div>
+    <div class="panel times"><span>LAP</span><b id="tCur">0:00.00</b><span>BEST</span><b id="tBest">–</b><span>LAST</span><b id="tLast">–</b></div>
+  </div>
+  <canvas id="minimap"></canvas>
+  <canvas id="speedo"></canvas>
+  <div class="panel" id="lights" hidden><i></i><i></i><i></i><i></i><i></i></div>
+  <div id="flash"></div>
+  <div id="wrong" hidden>WRONG WAY</div>
+  <div class="panel" id="paused" hidden>PAUSED</div>
+  <div class="panel" id="toast" hidden></div>
+</div>
+<div id="tags"></div>
+
+<div class="touch" id="touchL"><button id="tLeft" type="button">◀</button><button id="tRight" type="button">▶</button></div>
+<div class="touch" id="touchR"><button id="tBrake" type="button">BRAKE</button><button id="tGas" type="button">GAS</button></div>
+
+<div class="overlay" id="startScreen" hidden>
+  <div class="card">
+    <h1 class="brand">Ridgeline <span>GP</span></h1>
+    <p class="sub">Wheel-to-wheel racing on a hillside circuit. Race your friends online or take on the AI.</p>
+    <label class="field" for="nameInput">DRIVER NAME<input id="nameInput" maxlength="14" autocomplete="nickname" placeholder="Driver"></label>
+    <div class="group">
+      <h3>RACE FRIENDS ONLINE</h3>
+      <button class="btn" id="createBtn" type="button">Create lobby</button>
+      <div class="row">
+        <input id="codeInput" maxlength="4" autocomplete="off" placeholder="CODE" aria-label="Lobby code">
+        <button class="btn alt" id="joinBtn" type="button">Join</button>
+      </div>
+      <p class="note" id="offlineNote" hidden>Online races need the server: run <kbd>npm start</kbd> and open the address it prints.</p>
+      <p id="menuMsg" hidden></p>
+    </div>
+    <div class="group">
+      <h3>SOLO</h3>
+      <div class="row">
+        <button class="btn alt" id="soloBtn" type="button">Race the AI</button>
+        <select id="soloLaps" aria-label="Laps"><option value="1">1 lap</option><option value="3" selected>3 laps</option><option value="5">5 laps</option></select>
+      </div>
+      <div class="stat"><span>Your best lap</span><b id="sBest">–</b></div>
+    </div>
+    <p class="keys"><kbd>W</kbd> <kbd>↑</kbd> throttle · <kbd>S</kbd> <kbd>↓</kbd> brake / reverse · <kbd>A</kbd> <kbd>D</kbd> steer · <kbd>Space</kbd> handbrake<br>
+      <kbd>C</kbd> camera · <kbd>R</kbd> reset to track · <kbd>M</kbd> sound · gamepads work too (RT / LT / left stick)</p>
+  </div>
+</div>
+
+<div class="overlay" id="lobbyScreen" hidden>
+  <div class="card">
+    <h2>Lobby</h2>
+    <div class="code" id="roomCode">----</div>
+    <div class="link" id="roomLink"></div>
+    <button class="btn alt" id="copyCode" type="button">Copy invite link</button>
+    <ul class="players" id="lobbyPlayers"></ul>
+    <label class="field">LAPS</label>
+    <div class="seg" id="lapPick">
+      <button type="button" data-laps="1">1</button><button type="button" data-laps="3">3</button><button type="button" data-laps="5">5</button>
+    </div>
+    <p class="note" id="lobbyHint"></p>
+    <button class="btn" id="startRace" type="button">Start race</button>
+    <p class="note" id="lobbyWait">Waiting for the host to start the race…</p>
+    <button class="btn alt" id="leaveLobby" type="button">Leave lobby</button>
+  </div>
+</div>
+
+<div class="overlay" id="resultsScreen" hidden>
+  <div class="card">
+    <h2 id="resultsTitle">Race over</h2>
+    <table class="results">
+      <thead><tr><td>POS</td><td>DRIVER</td><td>TIME</td><td>BEST LAP</td></tr></thead>
+      <tbody id="resultsRows"></tbody>
+    </table>
+    <button class="btn" id="rematch" type="button">Race again</button>
+    <p class="note" id="resultsWait">Waiting for the host to set up the next race…</p>
+    <button class="btn alt" id="leaveResults" type="button">Main menu</button>
+  </div>
+</div>
+
+<script src="dist/game.js"></script>
+</body>
+</html>

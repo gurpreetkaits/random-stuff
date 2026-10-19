@@ -1,0 +1,19 @@
+{
+  "name": "hill-climb",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npm run build && node server/server.js",
+    "models": "/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P models/build_models.py",
+    "build": "esbuild src/main.js --bundle --format=iife --loader:.glb=binary --minify --outfile=dist/game.js",
+    "dev": "esbuild src/main.js --bundle --format=iife --loader:.glb=binary --sourcemap --outfile=dist/game.js --watch",
+    "test": "node test/sim.test.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "three": "^0.186.1"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  }
+}
